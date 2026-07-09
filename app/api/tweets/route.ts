@@ -39,37 +39,28 @@ type XResponse<T> = {
   errors?: XError[];
 };
 
-const demoTweets: XTweet[] = [
-  {
-    id: "demo-1",
-    text: "This is demo mode. Add X_BEARER_TOKEN to .env.local and the app will fetch live public posts for any username.",
-    created_at: new Date().toISOString(),
-    public_metrics: { like_count: 128, repost_count: 24, reply_count: 9, quote_count: 3 }
-  },
-  {
-    id: "demo-2",
-    text: "The timeline is intentionally clean: one creator, reverse chronological posts, no algorithmic noise.",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
-    public_metrics: { like_count: 87, repost_count: 11, reply_count: 4, quote_count: 1 }
-  },
-  {
-    id: "demo-3",
-    text: "Try usernames like nasa, openai, or vercel after configuring an X API bearer token.",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 22).toISOString(),
-    public_metrics: { like_count: 64, repost_count: 7, reply_count: 2, quote_count: 0 }
-  }
-];
+class XApiError extends Error {
+  status: number;
 
-const demoUser: XUser = {
-  id: "demo-user",
-  name: "Clean X Timeline",
-  username: "demo",
-  public_metrics: {
-    followers_count: 1200,
-    following_count: 48,
-    tweet_count: 3
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "XApiError";
+    this.status = status;
   }
-};
+}
+
+function embeddedTimelineResponse(username: string, fallbackReason: string) {
+  return NextResponse.json({
+    mode: "embed",
+    fallbackReason,
+    user: {
+      id: `embed-${username}`,
+      name: `@${username}`,
+      username
+    },
+    tweets: []
+  });
+}
 
 async function fetchFromX<T>(path: string, token: string): Promise<XResponse<T>> {
   const url = `${API_ROOT}${path}`;
@@ -99,7 +90,8 @@ async function parseXResponse<T>(response: Response): Promise<XResponse<T>> {
 
   if (!response.ok) {
     if (response.status === 402) {
-      throw new Error(
+      throw new XApiError(
+        response.status,
         "X API returned 402 Payment Required. Your developer app needs API credits or an access level that allows public read requests."
       );
     }
@@ -108,7 +100,7 @@ async function parseXResponse<T>(response: Response): Promise<XResponse<T>> {
       payload.errors?.map((error) => error.detail || error.title).filter(Boolean).join(" ") ||
       `X API request failed with status ${response.status}.`;
 
-    throw new Error(errorMessage);
+    throw new XApiError(response.status, errorMessage);
   }
 
   return payload;
@@ -132,12 +124,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!token) {
-    return NextResponse.json({
-      mode: "demo",
-      configMissing: "X_BEARER_TOKEN",
-      user: { ...demoUser, username },
-      tweets: demoTweets
-    });
+    return embeddedTimelineResponse(username, "No X API token is configured, so real posts are shown with X's public embedded timeline.");
   }
 
   try {
@@ -167,6 +154,13 @@ export async function GET(request: NextRequest) {
       tweets: tweetsResponse.data || []
     });
   } catch (error) {
+    if (error instanceof XApiError && error.status === 402) {
+      return embeddedTimelineResponse(
+        username,
+        "The X API requires paid credits for this request, so real posts are shown with X's public embedded timeline."
+      );
+    }
+
     const message = error instanceof Error ? error.message : "Could not load posts from X.";
     return NextResponse.json({ error: message }, { status: 502 });
   }

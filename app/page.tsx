@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AtSign, ExternalLink, Heart, MessageCircle, Repeat2, Search, Sparkles } from "lucide-react";
 
 type TimelineUser = {
@@ -28,12 +28,22 @@ type TimelineTweet = {
 };
 
 type TimelineResponse = {
-  mode?: "demo" | "live";
-  configMissing?: string;
+  mode?: "embed" | "live";
+  fallbackReason?: string;
   user?: TimelineUser;
   tweets?: TimelineTweet[];
   error?: string;
 };
+
+declare global {
+  interface Window {
+    twttr?: {
+      widgets?: {
+        load: () => void;
+      };
+    };
+  }
+}
 
 const numberFormatter = new Intl.NumberFormat("en", {
   notation: "compact",
@@ -77,6 +87,31 @@ export default function Home() {
     const handle = timeline?.user?.username || submittedUsername;
     return handle ? `https://x.com/${handle}` : "https://x.com";
   }, [submittedUsername, timeline?.user?.username]);
+
+  useEffect(() => {
+    if (timeline?.mode !== "embed") {
+      return;
+    }
+
+    if (window.twttr?.widgets) {
+      window.twttr.widgets.load();
+      return;
+    }
+
+    const scriptId = "x-widgets-script";
+    const existingScript = document.getElementById(scriptId);
+
+    if (existingScript) {
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = "https://platform.twitter.com/widgets.js";
+    script.async = true;
+    script.charset = "utf-8";
+    document.body.appendChild(script);
+  }, [timeline?.mode, timeline?.user?.username]);
 
   async function loadTimeline(handle: string) {
     const normalized = cleanUsername(handle);
@@ -161,10 +196,9 @@ export default function Home() {
           </div>
         ) : null}
 
-        {timeline?.mode === "demo" && timeline.configMissing ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium leading-6 text-amber-950">
-            Demo posts are showing because <code className="rounded bg-amber-100 px-1.5 py-0.5">{timeline.configMissing}</code>{" "}
-            is not configured. Add it to <code className="rounded bg-amber-100 px-1.5 py-0.5">.env.local</code> and restart the dev server to load real public posts.
+        {timeline?.mode === "embed" ? (
+          <div className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm font-medium leading-6 text-teal-950">
+            {timeline.fallbackReason || "Real posts are shown with X's public embedded timeline."}
           </div>
         ) : null}
 
@@ -211,14 +245,27 @@ export default function Home() {
               </div>
 
               <div className="mt-4 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
-                {timeline.mode === "demo"
-                  ? "Demo data shown until an X API bearer token is configured."
-                  : "Live public data from X API v2."}
+                {timeline.mode === "live"
+                  ? "Live public data from X API v2."
+                  : timeline.mode === "embed"
+                    ? "Live public profile embed from X."
+                    : "Search a username to load posts."}
               </div>
             </aside>
 
             <section className="flex flex-col gap-3" aria-label="Timeline posts">
-              {timeline.tweets?.length ? (
+              {timeline.mode === "embed" && timeline.user ? (
+                <div className="overflow-hidden rounded-lg border border-slate-200/80 bg-white/90 p-3 shadow-soft-line backdrop-blur">
+                  <a
+                    className="twitter-timeline"
+                    data-chrome="noheader nofooter noborders transparent"
+                    data-height="720"
+                    href={`https://twitter.com/${timeline.user.username}?ref_src=twsrc%5Etfw`}
+                  >
+                    Posts by @{timeline.user.username}
+                  </a>
+                </div>
+              ) : timeline.tweets?.length ? (
                 timeline.tweets.map((tweet) => (
                   <article
                     className="rounded-lg border border-slate-200/80 bg-white/90 p-4 shadow-soft-line backdrop-blur transition hover:border-slate-300"
