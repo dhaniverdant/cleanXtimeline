@@ -98,6 +98,12 @@ async function parseXResponse<T>(response: Response): Promise<XResponse<T>> {
   const payload = (await response.json().catch(() => ({}))) as XResponse<T>;
 
   if (!response.ok) {
+    if (response.status === 402) {
+      throw new Error(
+        "X API returned 402 Payment Required. Your developer app needs API credits or an access level that allows public read requests."
+      );
+    }
+
     const errorMessage =
       payload.errors?.map((error) => error.detail || error.title).filter(Boolean).join(" ") ||
       `X API request failed with status ${response.status}.`;
