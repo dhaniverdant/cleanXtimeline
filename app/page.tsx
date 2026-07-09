@@ -29,6 +29,7 @@ type TimelineTweet = {
 
 type TimelineResponse = {
   mode?: "demo" | "live";
+  configMissing?: string;
   user?: TimelineUser;
   tweets?: TimelineTweet[];
   error?: string;
@@ -160,6 +161,13 @@ export default function Home() {
           </div>
         ) : null}
 
+        {timeline?.mode === "demo" && timeline.configMissing ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium leading-6 text-amber-950">
+            Demo posts are showing because <code className="rounded bg-amber-100 px-1.5 py-0.5">{timeline.configMissing}</code>{" "}
+            is not configured. Add it to <code className="rounded bg-amber-100 px-1.5 py-0.5">.env.local</code> and restart the dev server to load real public posts.
+          </div>
+        ) : null}
+
         {timeline?.user ? (
           <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
             <aside className="h-fit rounded-lg border border-slate-200/80 bg-white/86 p-4 shadow-soft-line backdrop-blur">
@@ -203,7 +211,9 @@ export default function Home() {
               </div>
 
               <div className="mt-4 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
-                {timeline.mode === "demo" ? "Demo data shown. Add an X API token for live posts." : "Live public data from X API v2."}
+                {timeline.mode === "demo"
+                  ? "Demo data shown until an X API bearer token is configured."
+                  : "Live public data from X API v2."}
               </div>
             </aside>
 

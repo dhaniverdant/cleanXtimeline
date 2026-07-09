@@ -128,6 +128,7 @@ export async function GET(request: NextRequest) {
   if (!token) {
     return NextResponse.json({
       mode: "demo",
+      configMissing: "X_BEARER_TOKEN",
       user: { ...demoUser, username },
       tweets: demoTweets
     });
